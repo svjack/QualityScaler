@@ -160,8 +160,9 @@ class AI:
         return 1
 
     def _load_inferenceSession(self) -> InferenceSession:
-        directml_backend = [('DmlExecutionProvider', {"device_id": gpus_list.index(self.directml_gpu)})]
-        return InferenceSession(self.AI_model_path, providers=directml_backend)
+        #directml_backend = [('DmlExecutionProvider', {"device_id": gpus_list.index(self.directml_gpu)})]
+        providers = ['CUDAExecutionProvider','CPUExecutionProvider',]
+        return InferenceSession(self.AI_model_path, providers=providers)
 
     def get_image_mode(self, image: np.ndarray) -> str:
         if len(image.shape) == 2:
