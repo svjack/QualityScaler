@@ -32,7 +32,7 @@ def image_read(file_path: str, flags: int = cv2.IMREAD_UNCHANGED) -> np.ndarray:
     with open(file_path, 'rb') as file:
         return cv2.imdecode(np.frombuffer(file.read(), np.uint8), flags)
 
-def image_write(file_path: str, file_data: np.ndarray) -> None:
+def image_write(file_path: str, file_data: np.ndarray):
     _, file_extension = os.path.splitext(file_path)
     cv2.imencode(file_extension, file_data)[1].tofile(file_path)
 
@@ -78,7 +78,7 @@ def extract_video_frames_and_audio(video_path: str, target_directory: str, cpu_n
 
     return video_frames_list
 
-def video_reconstruction_by_frames(video_path: str, audio_path: str, video_output_path: str, upscaled_frame_list_paths: list[str], cpu_number: int, selected_video_extension: str) -> None:
+def video_reconstruction_by_frames(video_path: str, audio_path: str, video_output_path: str, upscaled_frame_list_paths: list[str], cpu_number: int, selected_video_extension: str):
     frame_rate = get_video_fps(video_path)
 
     clip = ImageSequenceClip(sequence=upscaled_frame_list_paths, fps=frame_rate)
@@ -94,7 +94,7 @@ def video_reconstruction_by_frames(video_path: str, audio_path: str, video_outpu
         preset="ultrafast"
     )
 
-def upscale_image(image_path: str, output_path: str, AI_instance: 'AI', selected_AI_model: str, selected_image_extension: str, resize_factor: float, selected_interpolation_factor: float) -> None:
+def upscale_image(image_path: str, output_path: str, AI_instance: 'AI', selected_AI_model: str, selected_image_extension: str, resize_factor: float, selected_interpolation_factor: float):
     starting_image = image_read(image_path)
     upscaled_image = AI_instance.AI_orchestration(starting_image)
 
@@ -103,7 +103,7 @@ def upscale_image(image_path: str, output_path: str, AI_instance: 'AI', selected
     else:
         image_write(output_path, upscaled_image)
 
-def upscale_video(video_path: str, output_path: str, AI_instance: 'AI', selected_AI_model: str, resize_factor: float, cpu_number: int, selected_video_extension: str, selected_interpolation_factor: float) -> None:
+def upscale_video(video_path: str, output_path: str, AI_instance: 'AI', selected_AI_model: str, resize_factor: float, cpu_number: int, selected_video_extension: str, selected_interpolation_factor: float):
     target_directory = os.path.splitext(output_path)[0]
     os.makedirs(target_directory, exist_ok=True)
 
@@ -119,7 +119,7 @@ def upscale_video(video_path: str, output_path: str, AI_instance: 'AI', selected
 
     video_reconstruction_by_frames(video_path, f"{target_directory}/audio.mp3", output_path, upscaled_frame_list_paths, cpu_number, selected_video_extension)
 
-def interpolate_images_and_save(target_path: str, starting_image: np.ndarray, upscaled_image: np.ndarray, starting_image_importance: float) -> None:
+def interpolate_images_and_save(target_path: str, starting_image: np.ndarray, upscaled_image: np.ndarray, starting_image_importance: float):
     upscaled_image_importance = 1 - starting_image_importance
     starting_height, starting_width = get_image_resolution(starting_image)
     target_height, target_width = get_image_resolution(upscaled_image)
@@ -135,7 +135,7 @@ def interpolate_images_and_save(target_path: str, starting_image: np.ndarray, up
     interpolated_image = cv2.addWeighted(starting_image, starting_image_importance, upscaled_image, upscaled_image_importance, 0)
     image_write(target_path, interpolated_image)
 
-def manage_upscaled_video_frame_save_async(upscaled_frame: np.ndarray, starting_frame: np.ndarray, upscaled_frame_path: str, selected_interpolation_factor: float) -> None:
+def manage_upscaled_video_frame_save_async(upscaled_frame: np.ndarray, starting_frame: np.ndarray, upscaled_frame_path: str, selected_interpolation_factor: float):
     if selected_interpolation_factor > 0:
         interpolate_images_and_save(upscaled_frame_path, starting_frame, upscaled_frame, selected_interpolation_factor)
     else:
@@ -177,7 +177,7 @@ class AI:
     def get_image_resolution(self, image: np.ndarray) -> tuple:
         return image.shape[:2]
 
-    def calculate_target_resolution(self, image: np.ndarray) -> tuple:
+    def calculate_target_resolution(self, image: np.ndarray):
         height, width = self.get_image_resolution(image)
         target_height = height * self.upscale_factor
         target_width = width * self.upscale_factor
@@ -192,28 +192,28 @@ class AI:
     def resize_image_with_target_resolution(self, image: np.ndarray, t_height: int, t_width: int) -> np.ndarray:
         return cv2.resize(image, (t_width, t_height), interpolation=cv2.INTER_LINEAR if t_height + t_width > image.shape[0] + image.shape[1] else cv2.INTER_AREA)
 
-    def normalize_image(self, image: np.ndarray) -> tuple:
+    def normalize_image(self, image: np.ndarray):
         range = 255 if np.max(image) > 256 else 65535
         normalized_image = image / range
         return normalized_image, range
 
-    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
+    def preprocess_image(self, image: np.ndarray):
         image = np.transpose(image, (2, 0, 1))
         image = np.expand_dims(image, axis=0)
         return image
 
-    def onnxruntime_inference(self, image: np.ndarray) -> np.ndarray:
+    def onnxruntime_inference(self, image: np.ndarray):
         onnx_input = {self.inferenceSession.get_inputs()[0].name: image}
         onnx_output = self.inferenceSession.run(None, onnx_input)[0]
         return onnx_output
 
-    def postprocess_output(self, onnx_output: np.ndarray) -> np.ndarray:
+    def postprocess_output(self, onnx_output: np.ndarray):
         onnx_output = np.squeeze(onnx_output, axis=0)
         onnx_output = np.clip(onnx_output, 0, 1)
         onnx_output = np.transpose(onnx_output, (1, 2, 0))
         return onnx_output.astype(np.float32)
 
-    def de_normalize_image(self, onnx_output: np.ndarray, max_range: int) -> np.ndarray:
+    def de_normalize_image(self, onnx_output: np.ndarray, max_range: int):
         return (onnx_output * max_range).astype(np.uint8) if max_range == 255 else (onnx_output * max_range).round().astype(np.float32)
 
     def AI_upscale(self, image: np.ndarray) -> np.ndarray:
@@ -260,7 +260,7 @@ class AI:
             output_image = self.de_normalize_image(onnx_output, range)
             return output_image
 
-    def AI_orchestration(self, image: np.ndarray) -> np.ndarray:
+    def AI_orchestration(self, image: np.ndarray):
         resized_image = self.resize_image_with_resize_factor(image)
         return self.AI_upscale(resized_image)
 
