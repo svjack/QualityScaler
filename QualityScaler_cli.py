@@ -47,7 +47,7 @@ def get_video_fps(video_path: str) -> float:
     video_capture.release()
     return frame_rate
 
-def extract_video_frames_and_audio(video_path: str, target_directory: str, cpu_number: int) -> list[str]:
+def extract_video_frames_and_audio(video_path: str, target_directory: str, cpu_number: int):
     os.makedirs(target_directory, exist_ok=True)
 
     # Audio extraction
