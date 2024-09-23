@@ -1,6 +1,6 @@
 #AI
 #onnxruntime-directml==1.17.3
-onnxruntime-directml
+onnxruntime-gpu
 
 #GUI
 customtkinter
