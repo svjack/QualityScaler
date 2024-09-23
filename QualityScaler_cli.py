@@ -9,7 +9,6 @@ from PIL import Image
 import cv2
 import numpy as np
 from moviepy.editor import VideoFileClip, ImageSequenceClip
-from typing import List
 
 # Constants
 AI_LIST_SEPARATOR = ["----"]
@@ -24,30 +23,32 @@ interpolation_list = ["Low", "Medium", "High", "Disabled"]
 AI_multithreading_list = ["1 threads", "2 threads", "3 threads", "4 threads", "5 threads", "6 threads"]
 
 # Helper functions
-def find_by_relative_path(relative_path: str) -> str:
+def find_by_relative_path(relative_path):
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
-def image_read(file_path: str, flags: int = cv2.IMREAD_UNCHANGED) -> np.ndarray:
+def image_read(file_path, flags=cv2.IMREAD_UNCHANGED):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
     with open(file_path, 'rb') as file:
         return cv2.imdecode(np.frombuffer(file.read(), np.uint8), flags)
 
-def image_write(file_path: str, file_data: np.ndarray):
+def image_write(file_path, file_data):
     _, file_extension = os.path.splitext(file_path)
     cv2.imencode(file_extension, file_data)[1].tofile(file_path)
 
-def get_image_resolution(image: np.ndarray) -> tuple:
+def get_image_resolution(image):
     height = image.shape[0]
     width = image.shape[1]
     return height, width
 
-def get_video_fps(video_path: str) -> float:
+def get_video_fps(video_path):
     video_capture = cv2.VideoCapture(video_path)
     frame_rate = video_capture.get(cv2.CAP_PROP_FPS)
     video_capture.release()
     return frame_rate
 
-def extract_video_frames_and_audio(video_path: str, target_directory: str, cpu_number: int):
+def extract_video_frames_and_audio(video_path, target_directory, cpu_number):
     os.makedirs(target_directory, exist_ok=True)
 
     # Audio extraction
@@ -73,6 +74,8 @@ def extract_video_frames_and_audio(video_path: str, target_directory: str, cpu_n
             frame_path = f"{target_directory}/frame_{frame_number:03d}.jpg"
             frames_path_to_save.append(frame_path)
             video_frames_list.append(frame_path)
+            # Save the frame to the target directory
+            cv2.imwrite(frame_path, frame)
 
     video_capture.release()
 
@@ -94,7 +97,7 @@ def video_reconstruction_by_frames(video_path, audio_path, video_output_path, up
         preset="ultrafast"
     )
 
-def upscale_image(image_path: str, output_path: str, AI_instance: 'AI', selected_AI_model: str, selected_image_extension: str, resize_factor: float, selected_interpolation_factor: float):
+def upscale_image(image_path, output_path, AI_instance, selected_AI_model, selected_image_extension, resize_factor, selected_interpolation_factor):
     starting_image = image_read(image_path)
     upscaled_image = AI_instance.AI_orchestration(starting_image)
 
@@ -103,7 +106,7 @@ def upscale_image(image_path: str, output_path: str, AI_instance: 'AI', selected
     else:
         image_write(output_path, upscaled_image)
 
-def upscale_video(video_path: str, output_path: str, AI_instance: 'AI', selected_AI_model: str, resize_factor: float, cpu_number: int, selected_video_extension: str, selected_interpolation_factor: float):
+def upscale_video(video_path, output_path, AI_instance, selected_AI_model, resize_factor, cpu_number, selected_video_extension, selected_interpolation_factor):
     target_directory = os.path.splitext(output_path)[0]
     os.makedirs(target_directory, exist_ok=True)
 
@@ -113,13 +116,16 @@ def upscale_video(video_path: str, output_path: str, AI_instance: 'AI', selected
     for frame_index, frame_path in enumerate(frame_list_paths):
         upscaled_frame_path = upscaled_frame_list_paths[frame_index]
         if not os.path.exists(upscaled_frame_path):
+            if not os.path.exists(frame_path):
+                print(f"Frame file not found: {frame_path}")
+                continue
             starting_frame = image_read(frame_path)
             upscaled_frame = AI_instance.AI_orchestration(starting_frame)
             manage_upscaled_video_frame_save_async(upscaled_frame, starting_frame, upscaled_frame_path, selected_interpolation_factor)
 
     video_reconstruction_by_frames(video_path, f"{target_directory}/audio.mp3", output_path, upscaled_frame_list_paths, cpu_number, selected_video_extension)
 
-def interpolate_images_and_save(target_path: str, starting_image: np.ndarray, upscaled_image: np.ndarray, starting_image_importance: float):
+def interpolate_images_and_save(target_path, starting_image, upscaled_image, starting_image_importance):
     upscaled_image_importance = 1 - starting_image_importance
     starting_height, starting_width = get_image_resolution(starting_image)
     target_height, target_width = get_image_resolution(upscaled_image)
@@ -135,14 +141,14 @@ def interpolate_images_and_save(target_path: str, starting_image: np.ndarray, up
     interpolated_image = cv2.addWeighted(starting_image, starting_image_importance, upscaled_image, upscaled_image_importance, 0)
     image_write(target_path, interpolated_image)
 
-def manage_upscaled_video_frame_save_async(upscaled_frame: np.ndarray, starting_frame: np.ndarray, upscaled_frame_path: str, selected_interpolation_factor: float):
+def manage_upscaled_video_frame_save_async(upscaled_frame, starting_frame, upscaled_frame_path, selected_interpolation_factor):
     if selected_interpolation_factor > 0:
         interpolate_images_and_save(upscaled_frame_path, starting_frame, upscaled_frame, selected_interpolation_factor)
     else:
         image_write(upscaled_frame_path, upscaled_frame)
 
 class AI:
-    def __init__(self, AI_model_name: str, directml_gpu: str, resize_factor: float, max_resolution: int):
+    def __init__(self, AI_model_name, directml_gpu, resize_factor, max_resolution):
         self.AI_model_name = AI_model_name
         self.directml_gpu = directml_gpu
         self.resize_factor = resize_factor
@@ -151,7 +157,7 @@ class AI:
         self.inferenceSession = self._load_inferenceSession()
         self.upscale_factor = self._get_upscale_factor()
 
-    def _get_upscale_factor(self) -> int:
+    def _get_upscale_factor(self):
         if "x1" in self.AI_model_name:
             return 1
         elif "x2" in self.AI_model_name:
@@ -160,12 +166,12 @@ class AI:
             return 4
         return 1
 
-    def _load_inferenceSession(self) -> InferenceSession:
+    def _load_inferenceSession(self):
         #directml_backend = [('DmlExecutionProvider', {"device_id": gpus_list.index(self.directml_gpu)})]
         providers = ['CUDAExecutionProvider','CPUExecutionProvider',]
         return InferenceSession(self.AI_model_path, providers=providers)
 
-    def get_image_mode(self, image: np.ndarray) -> str:
+    def get_image_mode(self, image):
         if len(image.shape) == 2:
             return "Grayscale"
         elif image.shape[2] == 3:
@@ -174,49 +180,49 @@ class AI:
             return "RGBA"
         return "RGB"
 
-    def get_image_resolution(self, image: np.ndarray) -> tuple:
+    def get_image_resolution(self, image):
         return image.shape[:2]
 
-    def calculate_target_resolution(self, image: np.ndarray):
+    def calculate_target_resolution(self, image):
         height, width = self.get_image_resolution(image)
         target_height = height * self.upscale_factor
         target_width = width * self.upscale_factor
         return target_height, target_width
 
-    def resize_image_with_resize_factor(self, image: np.ndarray) -> np.ndarray:
+    def resize_image_with_resize_factor(self, image):
         old_height, old_width = self.get_image_resolution(image)
         new_width = int(old_width * self.resize_factor)
         new_height = int(old_height * self.resize_factor)
         return cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR if self.resize_factor > 1 else cv2.INTER_AREA)
 
-    def resize_image_with_target_resolution(self, image: np.ndarray, t_height: int, t_width: int) -> np.ndarray:
+    def resize_image_with_target_resolution(self, image, t_height, t_width):
         return cv2.resize(image, (t_width, t_height), interpolation=cv2.INTER_LINEAR if t_height + t_width > image.shape[0] + image.shape[1] else cv2.INTER_AREA)
 
-    def normalize_image(self, image: np.ndarray):
+    def normalize_image(self, image):
         range = 255 if np.max(image) > 256 else 65535
         normalized_image = image / range
         return normalized_image, range
 
-    def preprocess_image(self, image: np.ndarray):
+    def preprocess_image(self, image):
         image = np.transpose(image, (2, 0, 1))
         image = np.expand_dims(image, axis=0)
         return image
 
-    def onnxruntime_inference(self, image: np.ndarray):
+    def onnxruntime_inference(self, image):
         onnx_input = {self.inferenceSession.get_inputs()[0].name: image}
         onnx_output = self.inferenceSession.run(None, onnx_input)[0]
         return onnx_output
 
-    def postprocess_output(self, onnx_output: np.ndarray):
+    def postprocess_output(self, onnx_output):
         onnx_output = np.squeeze(onnx_output, axis=0)
         onnx_output = np.clip(onnx_output, 0, 1)
         onnx_output = np.transpose(onnx_output, (1, 2, 0))
         return onnx_output.astype(np.float32)
 
-    def de_normalize_image(self, onnx_output: np.ndarray, max_range: int):
+    def de_normalize_image(self, onnx_output, max_range):
         return (onnx_output * max_range).astype(np.uint8) if max_range == 255 else (onnx_output * max_range).round().astype(np.float32)
 
-    def AI_upscale(self, image: np.ndarray) -> np.ndarray:
+    def AI_upscale(self, image):
         image_mode = self.get_image_mode(image)
         image, range = self.normalize_image(image)
         image = image.astype(np.float32)
@@ -260,7 +266,7 @@ class AI:
             output_image = self.de_normalize_image(onnx_output, range)
             return output_image
 
-    def AI_orchestration(self, image: np.ndarray):
+    def AI_orchestration(self, image):
         resized_image = self.resize_image_with_resize_factor(image)
         return self.AI_upscale(resized_image)
 
@@ -295,5 +301,8 @@ def main():
     else:
         print("Unsupported file format")
 
+'''
+python QualityScaler_cli.py "丽莎.mp4" "丽莎_out.mp4" --ai_model RealESR_Gx4 --gpu "GPU 1" --resize_factor 0.5 --interpolation Medium --cpu_number 4 --video_extension ".mp4 (x264)" --vram_limit 4
+'''
 if __name__ == "__main__":
     main()
