@@ -78,7 +78,7 @@ def extract_video_frames_and_audio(video_path: str, target_directory: str, cpu_n
 
     return video_frames_list
 
-def video_reconstruction_by_frames(video_path: str, audio_path: str, video_output_path: str, upscaled_frame_list_paths: list[str], cpu_number: int, selected_video_extension: str):
+def video_reconstruction_by_frames(video_path, audio_path, video_output_path, upscaled_frame_list_paths, cpu_number, selected_video_extension):
     frame_rate = get_video_fps(video_path)
 
     clip = ImageSequenceClip(sequence=upscaled_frame_list_paths, fps=frame_rate)
