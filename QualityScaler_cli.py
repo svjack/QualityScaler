@@ -9,6 +9,7 @@ from PIL import Image
 import cv2
 import numpy as np
 from moviepy.editor import VideoFileClip, ImageSequenceClip
+from typing import List
 
 # Constants
 AI_LIST_SEPARATOR = ["----"]
